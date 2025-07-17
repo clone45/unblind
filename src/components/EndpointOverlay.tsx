@@ -107,8 +107,7 @@ export const EndpointOverlay: React.FC<EndpointOverlayProps> = ({
           cy={endpoint.position.y}
           r={12}
           fill="rgba(0, 0, 0, 0.3)"
-          stroke="rgba(0, 0, 0, 0.6)"
-          strokeWidth="2"
+          stroke="none"
           style={{ pointerEvents: 'auto', cursor: 'pointer' }}
           onMouseDown={(e) => onEndpointMouseDown(e as any, endpoint.connectorId, endpoint.point)}
           onMouseEnter={() => onEndpointHover?.(endpoint.connectorId, endpoint.point)}

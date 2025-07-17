@@ -1,5 +1,6 @@
 import { DiagramNode, Node, Position, Size } from './node';
 import { DiagramConnector, Connector, ConnectionPoint, ConnectionSide, ConnectionUtils } from './connector';
+import { LogHighlightStyle, LogAction, ProcessedLogAction } from './log';
 
 export interface ViewportState {
   zoom: number;
@@ -40,6 +41,9 @@ export class DiagramCanvas {
   private history: Array<{ nodes: Map<string, DiagramNode>; connectors: Map<string, DiagramConnector> }> = [];
   private historyIndex: number = -1;
   private maxHistorySize: number = 50;
+  
+  // Log highlights state (separate from user selection)
+  private logHighlights: Map<string, LogHighlightStyle> = new Map();
 
   constructor(width: number, height: number) {
     this.viewport = {
@@ -165,10 +169,77 @@ export class DiagramCanvas {
     return true;
   }
 
+  updateNodeId(oldId: string, newId: string): boolean {
+    const node = this.nodes.get(oldId);
+    if (!node) return false;
+
+    // Check if new ID already exists
+    if (this.nodes.has(newId)) return false;
+
+    // Update the node's ID
+    node.updateId(newId);
+
+    // Update the nodes map
+    this.nodes.delete(oldId);
+    this.nodes.set(newId, node);
+
+    // Update any connectors that reference this node
+    this.connectors.forEach(connector => {
+      if (connector.startPoint.nodeId === oldId) {
+        connector.startPoint.nodeId = newId;
+      }
+      if (connector.endPoint.nodeId === oldId) {
+        connector.endPoint.nodeId = newId;
+      }
+    });
+
+    // Update selection state if the node was selected
+    if (this.selection.selectedNodes.has(oldId)) {
+      this.selection.selectedNodes.delete(oldId);
+      this.selection.selectedNodes.add(newId);
+    }
+
+    this.saveToHistory();
+    return true;
+  }
+
   // Connector Management
   addConnector(connector: DiagramConnector): void {
     this.connectors.set(connector.id, connector);
     this.saveToHistory();
+  }
+
+  updateConnectorId(oldId: string, newId: string): boolean {
+    const connector = this.connectors.get(oldId);
+    if (!connector) return false;
+
+    // Check if new ID already exists
+    if (this.connectors.has(newId)) return false;
+
+    // Update the connector's ID
+    connector.id = newId;
+
+    // Update the connectors map
+    this.connectors.delete(oldId);
+    this.connectors.set(newId, connector);
+
+    // Update selection state if the connector was selected
+    if (this.selection.selectedConnectors.has(oldId)) {
+      this.selection.selectedConnectors.delete(oldId);
+      this.selection.selectedConnectors.add(newId);
+    }
+
+    // Update log highlights if the connector was highlighted
+    if (this.logHighlights.has(oldId)) {
+      const highlight = this.logHighlights.get(oldId);
+      this.logHighlights.delete(oldId);
+      if (highlight) {
+        this.logHighlights.set(newId, highlight);
+      }
+    }
+
+    this.saveToHistory();
+    return true;
   }
 
   removeConnector(connectorId: string): boolean {
@@ -452,5 +523,73 @@ export class DiagramCanvas {
     
     this.clearSelection();
     this.saveToHistory();
+  }
+
+  // Log Highlight Methods
+  applyLogActions(actions: LogAction[]): void {
+    this.clearLogHighlights();
+    
+    actions.forEach(action => {
+      const processedAction = this.processLogAction(action);
+      
+      processedAction.targetIds.forEach(id => {
+        this.logHighlights.set(id, processedAction.highlightStyle);
+      });
+    });
+  }
+
+  clearLogHighlights(): void {
+    this.logHighlights.clear();
+  }
+
+  getLogHighlights(): Map<string, LogHighlightStyle> {
+    return new Map(this.logHighlights);
+  }
+
+  private processLogAction(action: LogAction): ProcessedLogAction {
+    // Normalize IDs to array
+    const targetIds = Array.isArray(action.id) ? action.id : [action.id];
+    
+    // Convert action to highlight style
+    const highlightStyle: LogHighlightStyle = {
+      type: action.action,
+      style: action.style as LogHighlightStyle['style'],
+      animation: action.action === 'pulse' || action.action === 'trace'
+    };
+    
+    // Set default colors based on style
+    if (!highlightStyle.color) {
+      switch (highlightStyle.style) {
+        case 'success':
+          highlightStyle.color = '#22c55e'; // green-500
+          break;
+        case 'error':
+          highlightStyle.color = '#ef4444'; // red-500
+          break;
+        case 'warning':
+          highlightStyle.color = '#f59e0b'; // amber-500
+          break;
+        case 'active':
+          highlightStyle.color = '#3b82f6'; // blue-500
+          break;
+        case 'context':
+          highlightStyle.color = '#6b7280'; // gray-500
+          break;
+        case 'destination':
+          highlightStyle.color = '#8b5cf6'; // violet-500
+          break;
+        case 'path':
+          highlightStyle.color = '#06b6d4'; // cyan-500
+          break;
+        default:
+          highlightStyle.color = '#3b82f6'; // blue-500 (default)
+      }
+    }
+    
+    return {
+      ...action,
+      targetIds,
+      highlightStyle
+    };
   }
 }

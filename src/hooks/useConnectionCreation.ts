@@ -73,6 +73,11 @@ export const useConnectionCreation = ({ canvas, nodes, mousePosition, onUpdate, 
     
     if (!canvas) return;
     
+    // Clear any existing selections and select the node
+    canvas.clearSelection();
+    canvas.selectNode(nodeId);
+    onUpdate();
+    
     // Use the provided canvas position calculator
     const canvasPos = getCanvasPosition(event.clientX, event.clientY);
     

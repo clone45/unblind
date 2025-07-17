@@ -87,6 +87,11 @@ export class DiagramNode implements Node {
     this.updatedAt = new Date();
   }
 
+  updateId(newId: string): void {
+    this.id = newId;
+    this.updatedAt = new Date();
+  }
+
   select(): void {
     this.selected = true;
     this.updatedAt = new Date();

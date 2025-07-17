@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { DiagramNode, NodeType } from '@/types/node';
+import { LogHighlightStyle } from '@/types/log';
 
 interface NodeComponentProps {
   node: DiagramNode;
@@ -8,9 +9,10 @@ interface NodeComponentProps {
   onSkirtMouseDown?: (event: React.MouseEvent, nodeId: string) => void;
   suppressSkirtHover?: boolean;
   forceSkirtHover?: boolean;
+  logHighlight?: LogHighlightStyle;
 }
 
-export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNodeMouseDown, onSkirtMouseDown, suppressSkirtHover = false, forceSkirtHover = false }) => {
+export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNodeMouseDown, onSkirtMouseDown, suppressSkirtHover = false, forceSkirtHover = false, logHighlight }) => {
   const { position, size, title, type, selected, color } = node;
   const [isHovered, setIsHovered] = useState(false);
 
@@ -22,6 +24,48 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNode
   }, [suppressSkirtHover, isHovered]);
 
   const skirtPadding = 16; // Padding around the node for the skirt
+
+  // Helper function to get log highlight styles
+  const getLogHighlightStyles = (): Partial<React.CSSProperties> => {
+    if (!logHighlight) return {};
+    
+    const styles: Partial<React.CSSProperties> = {};
+    
+    switch (logHighlight.type) {
+      case 'highlight':
+        styles.boxShadow = `0 0 0 3px ${logHighlight.color}40, 0 2px 4px rgba(0, 0, 0, 0.1)`;
+        break;
+      case 'focus':
+        styles.boxShadow = `0 0 0 4px ${logHighlight.color}60, 0 0 20px ${logHighlight.color}30, 0 2px 4px rgba(0, 0, 0, 0.1)`;
+        styles.transform = `${type === NodeType.DIAMOND ? 'rotate(45deg)' : ''} scale(1.05)`;
+        break;
+      case 'annotate':
+        styles.boxShadow = `0 0 0 2px ${logHighlight.color}, 0 2px 4px rgba(0, 0, 0, 0.1)`;
+        break;
+      case 'trace':
+        styles.boxShadow = `0 0 0 2px ${logHighlight.color}, 0 2px 4px rgba(0, 0, 0, 0.1)`;
+        break;
+      case 'pulse':
+        styles.boxShadow = `0 0 0 3px ${logHighlight.color}60, 0 2px 4px rgba(0, 0, 0, 0.1)`;
+        break;
+    }
+    
+    return styles;
+  };
+
+  // Helper function to get animation classes
+  const getAnimationClass = (): string => {
+    if (!logHighlight?.animation) return '';
+    
+    switch (logHighlight.type) {
+      case 'pulse':
+        return 'animate-pulse';
+      case 'trace':
+        return 'animate-ping';
+      default:
+        return '';
+    }
+  };
 
   const containerStyle: React.CSSProperties = {
     position: 'absolute',
@@ -46,6 +90,9 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNode
     transition: (forceSkirtHover || (isHovered && !suppressSkirtHover)) ? 'none' : 'background-color 0.9s ease-out', // Fade out on leave, instant on enter
   };
 
+  const logHighlightStyles = getLogHighlightStyles();
+  const animationClass = getAnimationClass();
+  
   const nodeStyle: React.CSSProperties = {
     position: 'absolute',
     top: skirtPadding,
@@ -53,7 +100,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNode
     width: size.width,
     height: size.height,
     backgroundColor: color,
-    border: selected ? '2px solid #3b82f6' : '1px solid #d1d5db',
+    border: selected ? '3px solid #000000' : '1px solid #d1d5db',
     borderRadius: type === NodeType.CIRCLE ? '50%' : type === NodeType.DIAMOND ? '0' : '8px',
     display: 'flex',
     alignItems: 'center',
@@ -66,7 +113,8 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNode
     transform: type === NodeType.DIAMOND ? 'rotate(45deg)' : 'none',
     transformOrigin: 'center',
     transition: 'all 0.1s ease',
-    boxShadow: selected ? '0 0 0 2px rgba(59, 130, 246, 0.2)' : '0 2px 4px rgba(0, 0, 0, 0.1)',
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+    ...logHighlightStyles, // Merge log highlight styles
   };
 
   const textStyle: React.CSSProperties = {
@@ -113,7 +161,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNode
       />
       
       {/* Node Body - for dragging */}
-      <div style={nodeStyle} onMouseDown={handleNodeMouseDown}>
+      <div style={nodeStyle} className={animationClass} onMouseDown={handleNodeMouseDown}>
         {type === NodeType.TEXT ? (
           <div style={{ ...textStyle, color: '#000000', fontSize: `${Math.max(12, 16 * zoom)}px` }}>
             {title}

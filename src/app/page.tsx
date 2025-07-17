@@ -10,16 +10,21 @@ import { NodeComponent } from "@/components/NodeComponent";
 import { GridComponent } from "@/components/GridComponent";
 import { ConnectorComponent } from "@/components/ConnectorComponent";
 import { EndpointOverlay } from "@/components/EndpointOverlay";
+import { NodeEditor } from "@/components/NodeEditor";
+import { RightPanelTabs } from "@/components/RightPanelTabs";
 import { DiagramNode, NodeType } from "@/types/node";
-import { ConnectionUtils, ConnectionSide } from "@/types/connector";
+import { ConnectionUtils, ConnectionSide, DiagramConnector } from "@/types/connector";
+import { LogEntry } from "@/types/log";
 import { getHoveredEndpoints } from "@/utils/dragUtils";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 
 interface DragState {
   isDragging: boolean;
   nodeId: string | null;
   startMousePos: { x: number; y: number };
   startNodePos: { x: number; y: number };
+  wasAlreadySelected: boolean;
+  hasDraggedNode: boolean;
 }
 
 
@@ -31,9 +36,12 @@ export default function Home() {
     isDragging: false,
     nodeId: null,
     startMousePos: { x: 0, y: 0 },
-    startNodePos: { x: 0, y: 0 }
+    startNodePos: { x: 0, y: 0 },
+    wasAlreadySelected: false,
+    hasDraggedNode: false
   });
   const [hoveredEndpoint, setHoveredEndpoint] = useState<{ connectorId: string; endpointType: 'start' | 'end' } | null>(null);
+  const [selectedLogEntry, setSelectedLogEntry] = useState<LogEntry | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   
   // Use the endpoint drag hook
@@ -105,30 +113,31 @@ export default function Home() {
       console.log('Node1 position:', testNode1.position, 'center:', testNode1.getCenter());
       console.log('Node2 position:', testNode2.position, 'center:', testNode2.getCenter());
       
-      const testConnector1 = canvas.createConnector("test-node-1", "test-node-2");
-      const testConnector2 = canvas.createConnector("test-node-2", "test-node-1");
+      // Create connectors with predictable IDs for testing
+      const testConnector1 = new DiagramConnector(
+        "test-connector-1",
+        "test-node-1",
+        "test-node-2",
+        ConnectionSide.RIGHT,
+        ConnectionSide.LEFT
+      );
+      const testConnector2 = new DiagramConnector(
+        "test-connector-2", 
+        "test-node-2",
+        "test-node-1",
+        ConnectionSide.TOP,
+        ConnectionSide.BOTTOM
+      );
       
-      // Force different connection sides to make both visible
-      if (testConnector1) {
-        testConnector1.startPoint.side = ConnectionSide.RIGHT;
-        testConnector1.endPoint.side = ConnectionSide.LEFT;
-      }
-      if (testConnector2) {
-        testConnector2.startPoint.side = ConnectionSide.TOP;
-        testConnector2.endPoint.side = ConnectionSide.BOTTOM;
-      }
+      // Configure connectors
+      testConnector1.style.arrowStart = false;
+      testConnector1.style.arrowEnd = true;
+      testConnector2.style.arrowStart = false;
+      testConnector2.style.arrowEnd = true;
       
-      // Configure first connector
-      if (testConnector1) {
-        testConnector1.style.arrowStart = false;
-        testConnector1.style.arrowEnd = true;
-      }
-      
-      // Configure second connector (opposite direction)
-      if (testConnector2) {
-        testConnector2.style.arrowStart = false;
-        testConnector2.style.arrowEnd = true;
-      }
+      // Add connectors to canvas
+      canvas.addConnector(testConnector1);
+      canvas.addConnector(testConnector2);
       
       console.log('Created test connectors:', testConnector1, testConnector2);
       
@@ -149,13 +158,23 @@ export default function Home() {
     if (connectionCreationState.isCreating) return;
     
     const node = canvas?.getNode(nodeId);
-    if (!node) return;
+    if (!node || !canvas) return;
+
+    // Track if the node was already selected before clicking
+    const wasAlreadySelected = node.selected;
+
+    // Clear any existing selections and select the node
+    canvas.clearSelection();
+    canvas.selectNode(nodeId);
+    refresh();
 
     setDragState({
       isDragging: true,
       nodeId,
       startMousePos: { x: event.clientX, y: event.clientY },
-      startNodePos: { x: node.position.x, y: node.position.y }
+      startNodePos: { x: node.position.x, y: node.position.y },
+      wasAlreadySelected,
+      hasDraggedNode: false
     });
   };
 
@@ -205,6 +224,12 @@ export default function Home() {
     const deltaX = event.clientX - dragState.startMousePos.x;
     const deltaY = event.clientY - dragState.startMousePos.y;
 
+    // Track that actual dragging has occurred if mouse moved significantly
+    const hasMovedSignificantly = Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2;
+    if (hasMovedSignificantly && !dragState.hasDraggedNode) {
+      setDragState(prev => ({ ...prev, hasDraggedNode: true }));
+    }
+
     const newPosition = {
       x: dragState.startNodePos.x + deltaX,
       y: dragState.startNodePos.y + deltaY
@@ -227,11 +252,19 @@ export default function Home() {
 
   const handleMouseUp = () => {
     if (dragState.isDragging) {
+      // If the node was already selected and we didn't drag it, deselect it
+      if (dragState.wasAlreadySelected && !dragState.hasDraggedNode && dragState.nodeId && canvas) {
+        canvas.deselectNode(dragState.nodeId);
+        refresh();
+      }
+      
       setDragState({
         isDragging: false,
         nodeId: null,
         startMousePos: { x: 0, y: 0 },
-        startNodePos: { x: 0, y: 0 }
+        startNodePos: { x: 0, y: 0 },
+        wasAlreadySelected: false,
+        hasDraggedNode: false
       });
     }
     
@@ -261,6 +294,98 @@ export default function Home() {
     refresh();
   };
 
+  // Get the currently selected components
+  const selectedNode = canvas?.getSelectedNodes()[0] || null;
+  const selectedConnector = canvas?.getSelectedConnectors()[0] || null;
+
+  // Handle node updates
+  const handleUpdateNode = (nodeId: string, updates: Partial<DiagramNode>) => {
+    if (!canvas) return;
+    
+    const node = canvas.getNode(nodeId);
+    if (!node) return;
+    
+    // Handle ID changes (requires special handling in canvas)
+    if (updates.id !== undefined && updates.id !== nodeId) {
+      // Check for duplicate IDs
+      if (canvas.getNode(updates.id)) {
+        console.error(`Node with ID "${updates.id}" already exists`);
+        return;
+      }
+      
+      // Update the node ID in the canvas
+      canvas.updateNodeId(nodeId, updates.id);
+    }
+    
+    // Update other node properties
+    if (updates.title !== undefined) {
+      node.updateTitle(updates.title);
+    }
+    
+    refresh();
+  };
+
+  // Handle connector updates
+  const handleUpdateConnector = (connectorId: string, updates: Partial<DiagramConnector>) => {
+    if (!canvas) return;
+    
+    const connector = canvas.getConnector(connectorId);
+    if (!connector) return;
+    
+    // Handle ID changes (requires special handling in canvas)
+    if (updates.id !== undefined && updates.id !== connectorId) {
+      // Check for duplicate IDs (check both nodes and connectors)
+      if (canvas.getNode(updates.id) || canvas.getConnector(updates.id)) {
+        console.error(`Component with ID "${updates.id}" already exists`);
+        return;
+      }
+      
+      // Update the connector ID in the canvas
+      canvas.updateConnectorId(connectorId, updates.id);
+    }
+    
+    // Handle other connector property updates (label, type, etc.)
+    if (updates.label !== undefined) {
+      connector.setLabel(updates.label);
+    }
+    
+    if (updates.type !== undefined) {
+      connector.updateType(updates.type);
+    }
+    
+    if (updates.style !== undefined) {
+      connector.updateStyle(updates.style);
+    }
+    
+    refresh();
+  };
+
+  // Handle log entry selection
+  const handleLogEntrySelect = useCallback((entry: LogEntry | null) => {
+    setSelectedLogEntry(entry);
+    
+    if (canvas) {
+      canvas.clearLogHighlights();
+      
+      if (entry?.unblind?.actions) {
+        canvas.applyLogActions(entry.unblind.actions);
+        refresh(); // Force re-render to show highlights
+      }
+    }
+  }, [canvas, refresh]);
+
+  // Handle connector selection
+  const handleConnectorClick = (event: React.MouseEvent, connectorId: string) => {
+    event.stopPropagation();
+    
+    if (!canvas) return;
+    
+    // Clear any existing selections and select the connector
+    canvas.clearSelection();
+    canvas.selectConnector(connectorId);
+    refresh();
+  };
+
 
   // Hide all endpoint detection when creating connections or repositioning endpoints
   const shouldShowEndpoints = !connectionCreationState.isCreating && !endpointDragState.isDragging;
@@ -268,6 +393,9 @@ export default function Home() {
   
   const hoveredEndpoints = getHoveredEndpoints(availableConnectors, mousePosition);
   const isHoveringEndpoint = hoveredEndpoints.length > 0;
+  
+  // Get log highlights from canvas
+  const logHighlights = canvas?.getLogHighlights() || new Map();
   
   // Handle endpoint hover events
   const handleEndpointHover = (connectorId: string, endpointType: 'start' | 'end') => {
@@ -364,6 +492,8 @@ export default function Home() {
                   startPosition={startPosition}
                   endPosition={endPosition}
                   visible={!isBeingRepositioned}
+                  logHighlight={logHighlights.get(connector.id)}
+                  onConnectorClick={handleConnectorClick}
                 />
               );
             })}
@@ -397,6 +527,7 @@ export default function Home() {
                 onSkirtMouseDown={handleSkirtMouseDown}
                 suppressSkirtHover={shouldSuppressSkirtHover}
                 forceSkirtHover={shouldShowSkirtForHoveredEndpoint}
+                logHighlight={logHighlights.get(node.id)}
               />
             );
           })}
@@ -413,23 +544,16 @@ export default function Home() {
         </div>
       </div>
       
-      {/* Right Column - Properties/Tools Panel */}
-      <div className="w-80 bg-background p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Diagramming System</CardTitle>
-            <CardDescription>
-              Create and edit diagrams with ease
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Click the + button to add elements to your diagram.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Right Column - Tabbed Interface */}
+      <div className="w-80 bg-background border-l">
+        <RightPanelTabs
+          selectedNode={selectedNode}
+          selectedConnector={selectedConnector}
+          onUpdateNode={handleUpdateNode}
+          onUpdateConnector={handleUpdateConnector}
+          onLogEntrySelect={handleLogEntrySelect}
+          existingComponentIds={[...nodes.map(node => node.id), ...connectors.map(connector => connector.id)]}
+        />
       </div>
     </div>
   );
