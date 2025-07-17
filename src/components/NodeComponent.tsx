@@ -10,9 +10,10 @@ interface NodeComponentProps {
   suppressSkirtHover?: boolean;
   forceSkirtHover?: boolean;
   logHighlight?: LogHighlightStyle;
+  disableHover?: boolean;
 }
 
-export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNodeMouseDown, onSkirtMouseDown, suppressSkirtHover = false, forceSkirtHover = false, logHighlight }) => {
+export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNodeMouseDown, onSkirtMouseDown, suppressSkirtHover = false, forceSkirtHover = false, logHighlight, disableHover = false }) => {
   const { position, size, title, type, selected, color } = node;
   const [isHovered, setIsHovered] = useState(false);
 
@@ -88,11 +89,11 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNode
     width: '100%',
     height: '100%',
     borderRadius: type === NodeType.CIRCLE ? '50%' : type === NodeType.DIAMOND ? '0' : '12px',
-    backgroundColor: (forceSkirtHover || (isHovered && !suppressSkirtHover)) ? 'rgba(107, 114, 128, 0.3)' : 'rgba(107, 114, 128, 0)', // Gray visible on hover unless suppressed
-    cursor: suppressSkirtHover ? 'pointer' : 'crosshair', // Pointer when endpoint is detected, crosshair for skirt
+    backgroundColor: (forceSkirtHover || (isHovered && !suppressSkirtHover && !disableHover)) ? 'rgba(107, 114, 128, 0.3)' : 'rgba(107, 114, 128, 0)', // Gray visible on hover unless suppressed or disabled
+    cursor: disableHover ? 'default' : (suppressSkirtHover ? 'pointer' : 'crosshair'), // Default cursor when hover disabled
     transform: type === NodeType.DIAMOND ? 'rotate(45deg)' : 'none',
     transformOrigin: 'center',
-    transition: (forceSkirtHover || (isHovered && !suppressSkirtHover)) ? 'none' : 'background-color 0.9s ease-out', // Fade out on leave, instant on enter
+    transition: (forceSkirtHover || (isHovered && !suppressSkirtHover && !disableHover)) ? 'none' : 'background-color 0.9s ease-out', // Fade out on leave, instant on enter
   };
 
   const logHighlightStyles = getLogHighlightStyles();
@@ -110,7 +111,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNode
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    cursor: 'pointer',
+    cursor: disableHover ? 'default' : 'pointer',
     userSelect: 'none',
     fontSize: `${Math.max(12, 14 * zoom)}px`,
     color: '#ffffff',
@@ -152,13 +153,13 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNode
         style={skirtStyle}
         onMouseDown={handleSkirtMouseDown}
         onMouseEnter={() => {
-          if (!suppressSkirtHover) {
+          if (!suppressSkirtHover && !disableHover) {
             console.log('Skirt hover ENTER on node:', node.id);
             setIsHovered(true);
           }
         }}
         onMouseLeave={() => {
-          if (!suppressSkirtHover) {
+          if (!suppressSkirtHover && !disableHover) {
             console.log('Skirt hover LEAVE on node:', node.id);
             setIsHovered(false);
           }
@@ -166,7 +167,23 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNode
       />
       
       {/* Node Body - for dragging */}
-      <div style={nodeStyle} className={animationClass} onMouseDown={handleNodeMouseDown}>
+      <div 
+        style={nodeStyle} 
+        className={animationClass} 
+        onMouseDown={handleNodeMouseDown}
+        onMouseEnter={() => {
+          if (!suppressSkirtHover && !disableHover) {
+            console.log('Node body hover ENTER on node:', node.id);
+            setIsHovered(true);
+          }
+        }}
+        onMouseLeave={() => {
+          if (!suppressSkirtHover && !disableHover) {
+            console.log('Node body hover LEAVE on node:', node.id);
+            setIsHovered(false);
+          }
+        }}
+      >
         {type === NodeType.TEXT ? (
           <div style={{ ...textStyle, color: '#000000', fontSize: `${Math.max(12, 16 * zoom)}px` }}>
             {title}

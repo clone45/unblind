@@ -47,12 +47,19 @@ export default function Home() {
   const canvasRef = useRef<HTMLDivElement>(null);
   
   // Use the endpoint drag hook
-  const { endpointDragState, handleEndpointMouseDown, handleEndpointDrop, getDragPreviewLine } = useEndpointDrag({
+  const { endpointDragState, handleEndpointMouseDown: originalHandleEndpointMouseDown, handleEndpointDrop, getDragPreviewLine } = useEndpointDrag({
     canvas,
     nodes,
     mousePosition,
     onUpdate: refresh
   });
+
+  // Wrap endpoint mouse down to check mode
+  const handleEndpointMouseDown = (event: React.MouseEvent, connectorId: string, endpointType: 'start' | 'end') => {
+    // Don't allow endpoint dragging in Log Explorer mode
+    if (currentMode === 'log') return;
+    originalHandleEndpointMouseDown(event, connectorId, endpointType);
+  };
   
   // Canvas position calculator function
   const getCanvasPosition = (clientX: number, clientY: number) => {
@@ -66,13 +73,20 @@ export default function Home() {
   };
 
   // Use the connection creation hook
-  const { connectionCreationState, handleSkirtMouseDown, handleConnectionDrop, cancelConnectionCreation, getConnectionPreviewLine } = useConnectionCreation({
+  const { connectionCreationState, handleSkirtMouseDown: originalHandleSkirtMouseDown, handleConnectionDrop, cancelConnectionCreation, getConnectionPreviewLine } = useConnectionCreation({
     canvas,
     nodes,
     mousePosition,
     onUpdate: refresh,
     getCanvasPosition
   });
+
+  // Wrap skirt mouse down to check mode
+  const handleSkirtMouseDown = (event: React.MouseEvent, nodeId: string) => {
+    // Don't allow connection creation in Log Explorer mode
+    if (currentMode === 'log') return;
+    originalHandleSkirtMouseDown(event, nodeId);
+  };
 
   // Update canvas size on window resize
   useEffect(() => {
@@ -155,6 +169,9 @@ export default function Home() {
 
   const handleNodeMouseDown = (event: React.MouseEvent, nodeId: string) => {
     event.preventDefault();
+    
+    // Don't allow node interaction in Log Explorer mode
+    if (currentMode === 'log') return;
     
     // Don't start node dragging if we're creating a connection
     if (connectionCreationState.isCreating) return;
@@ -380,6 +397,9 @@ export default function Home() {
   const handleConnectorClick = (event: React.MouseEvent, connectorId: string) => {
     event.stopPropagation();
     
+    // Don't allow connector interaction in Log Explorer mode
+    if (currentMode === 'log') return;
+    
     if (!canvas) return;
     
     // Clear any existing selections and select the connector
@@ -389,8 +409,8 @@ export default function Home() {
   };
 
 
-  // Hide all endpoint detection when creating connections or repositioning endpoints
-  const shouldShowEndpoints = !connectionCreationState.isCreating && !endpointDragState.isDragging;
+  // Hide all endpoint detection when creating connections or repositioning endpoints, or in Log Explorer mode
+  const shouldShowEndpoints = !connectionCreationState.isCreating && !endpointDragState.isDragging && currentMode === 'graph';
   const availableConnectors = shouldShowEndpoints ? connectors : [];
   
   const hoveredEndpoints = getHoveredEndpoints(availableConnectors, mousePosition);
@@ -559,6 +579,7 @@ export default function Home() {
                 suppressSkirtHover={shouldSuppressSkirtHover}
                 forceSkirtHover={shouldShowSkirtForHoveredEndpoint}
                 logHighlight={logHighlights.get(node.id)}
+                disableHover={currentMode === 'log'}
               />
             );
           })}

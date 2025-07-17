@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LogEntry } from '@/types/log';
+import { DirectoryBrowser } from './DirectoryBrowser';
+import { DirectoryInfo } from '@/utils/fileSystemAccess';
 
 interface LogViewerProps {
   onLogEntrySelect?: (entry: LogEntry | null) => void;
@@ -164,7 +166,9 @@ const mockLogEntries: LogEntry[] = [
 
 export const LogViewer: React.FC<LogViewerProps> = ({ onLogEntrySelect }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [logEntries] = useState<LogEntry[]>(mockLogEntries);
+  const [logEntries, setLogEntries] = useState<LogEntry[]>(mockLogEntries);
+  const [currentDirectory, setCurrentDirectory] = useState<DirectoryInfo | null>(null);
+  const [showDirectoryBrowser, setShowDirectoryBrowser] = useState(true);
 
   // Handle keyboard navigation
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
@@ -232,51 +236,96 @@ export const LogViewer: React.FC<LogViewerProps> = ({ onLogEntrySelect }) => {
     return entry.unblind?.data?.emoji || null;
   };
 
-  return (
-    <div className="h-full log-viewer-container">
-      <div className="pb-3 log-viewer-header">
-        <h3 className="text-lg font-semibold log-viewer-title">Log Entries</h3>
-        <div className="text-sm text-muted-foreground log-viewer-subtitle">
-          {logEntries.length} entries • Use ↑↓ to navigate
-        </div>
-      </div>
-      <div className="flex-1 log-viewer-content">
-        <div className="h-full overflow-y-auto log-entries-container">
-          {logEntries.map((entry, index) => (
-            <div
-              key={entry.id}
-              className={`
-                log-entry-item px-2 py-2 border-b cursor-pointer transition-colors
-                ${selectedIndex === index
-                  ? 'bg-blue-50 border-blue-200 log-entry-selected'
-                  : 'hover:bg-gray-50 log-entry-unselected'
-                }
-              `}
-              onClick={() => handleEntryClick(index)}
-            >
-              <div className="log-entry-content text-sm flex items-center gap-2">
-                {getLogEmoji(entry) && (
-                  <span className="log-entry-emoji" role="img" aria-label="log emoji">
-                    {getLogEmoji(entry)}
-                  </span>
-                )}
-                <span className="log-entry-message">
-                  {entry.message || 'No message'}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
+  // Handle log entries loaded from files
+  const handleLogEntriesLoad = useCallback((entries: LogEntry[]) => {
+    setLogEntries(entries);
+    setSelectedIndex(null);
+    setShowDirectoryBrowser(false);
+  }, []);
 
-        {selectedIndex !== null && logEntries[selectedIndex]?.unblind?.data && (
-          <div className="border-t p-4 bg-gray-50 log-entry-details">
-            <div className="text-sm font-medium mb-2 log-entry-details-title">Log Data:</div>
-            <pre className="text-xs bg-white p-2 rounded border overflow-auto max-h-32 log-entry-details-data">
-              {JSON.stringify(logEntries[selectedIndex].unblind?.data, null, 2)}
-            </pre>
+  // Handle directory change
+  const handleDirectoryChange = useCallback((info: DirectoryInfo | null) => {
+    setCurrentDirectory(info);
+    if (!info) {
+      // Reset to mock data when no directory is selected
+      setLogEntries(mockLogEntries);
+      setShowDirectoryBrowser(true);
+    }
+  }, []);
+
+  // Toggle between directory browser and log entries
+  const handleBackToDirectory = () => {
+    setShowDirectoryBrowser(true);
+    setSelectedIndex(null);
+  };
+
+  return (
+    <div className="h-full log-viewer-container flex flex-col">
+      {showDirectoryBrowser ? (
+        <DirectoryBrowser
+          onLogEntriesLoad={handleLogEntriesLoad}
+          onDirectoryChange={handleDirectoryChange}
+        />
+      ) : (
+        <>
+          <div className="pb-3 log-viewer-header">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold log-viewer-title">Log Entries</h3>
+                <div className="text-sm text-muted-foreground log-viewer-subtitle">
+                  {logEntries.length} entries • Use ↑↓ to navigate
+                </div>
+              </div>
+              {currentDirectory && (
+                <button
+                  onClick={handleBackToDirectory}
+                  className="text-sm text-blue-600 hover:text-blue-800 underline"
+                >
+                  Back to Files
+                </button>
+              )}
+            </div>
           </div>
-        )}
-      </div>
+
+          <div className="flex-1 log-viewer-content">
+            <div className="h-full overflow-y-auto log-entries-container">
+              {logEntries.map((entry, index) => (
+                <div
+                  key={entry.id}
+                  className={`
+                    log-entry-item px-2 py-2 border-b cursor-pointer transition-colors
+                    ${selectedIndex === index
+                      ? 'bg-blue-50 border-blue-200 log-entry-selected'
+                      : 'hover:bg-gray-50 log-entry-unselected'
+                    }
+                  `}
+                  onClick={() => handleEntryClick(index)}
+                >
+                  <div className="log-entry-content text-sm flex items-center gap-2">
+                    {getLogEmoji(entry) && (
+                      <span className="log-entry-emoji" role="img" aria-label="log emoji">
+                        {getLogEmoji(entry)}
+                      </span>
+                    )}
+                    <span className="log-entry-message">
+                      {entry.message || 'No message'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {selectedIndex !== null && logEntries[selectedIndex]?.unblind?.data && (
+              <div className="border-t p-4 bg-gray-50 log-entry-details">
+                <div className="text-sm font-medium mb-2 log-entry-details-title">Log Data:</div>
+                <pre className="text-xs bg-white p-2 rounded border overflow-auto max-h-32 log-entry-details-data">
+                  {JSON.stringify(logEntries[selectedIndex].unblind?.data, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 };
