@@ -204,9 +204,13 @@ export class ConnectionUtils {
     const absY = Math.abs(dy);
 
     if (absX > absY) {
-      return dx > 0 ? ConnectionSide.LEFT : ConnectionSide.RIGHT;
+      // If fromPosition is to the RIGHT of nodeCenter, connect to LEFT side
+      // If fromPosition is to the LEFT of nodeCenter, connect to RIGHT side
+      return dx > 0 ? ConnectionSide.RIGHT : ConnectionSide.LEFT;
     } else {
-      return dy > 0 ? ConnectionSide.TOP : ConnectionSide.BOTTOM;
+      // If fromPosition is BELOW nodeCenter, connect to TOP side
+      // If fromPosition is ABOVE nodeCenter, connect to BOTTOM side
+      return dy > 0 ? ConnectionSide.BOTTOM : ConnectionSide.TOP;
     }
   }
 }

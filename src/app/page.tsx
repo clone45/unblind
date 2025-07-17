@@ -6,7 +6,9 @@ import { Plus } from "lucide-react";
 import { useCanvas } from "@/hooks/useCanvas";
 import { NodeComponent } from "@/components/NodeComponent";
 import { GridComponent } from "@/components/GridComponent";
+import { ConnectorComponent } from "@/components/ConnectorComponent";
 import { DiagramNode, NodeType } from "@/types/node";
+import { ConnectionUtils, ConnectionSide } from "@/types/connector";
 import { useEffect, useState, useRef } from "react";
 
 interface DragState {
@@ -17,7 +19,7 @@ interface DragState {
 }
 
 export default function Home() {
-  const { canvas, nodes, viewport, refresh } = useCanvas();
+  const { canvas, nodes, connectors, viewport, refresh } = useCanvas();
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
   const [dragState, setDragState] = useState<DragState>({
     isDragging: false,
@@ -40,18 +42,67 @@ export default function Home() {
     return () => window.removeEventListener('resize', updateCanvasSize);
   }, []);
 
-  // Add a test node when canvas is ready
+  // Add test nodes and connection when canvas is ready
   useEffect(() => {
     if (canvas) {
-      const testNode = new DiagramNode(
+      // Create two test nodes
+      const testNode1 = new DiagramNode(
         "test-node-1",
         "Hello World",
         { x: 100, y: 100 },
         NodeType.RECTANGLE,
         { width: 120, height: 60 }
       );
-      canvas.addNode(testNode);
-      refresh(); // Trigger re-render after adding node
+      
+      const testNode2 = new DiagramNode(
+        "test-node-2",
+        "Second Node",
+        { x: 300, y: 200 },
+        NodeType.RECTANGLE,
+        { width: 120, height: 60 }
+      );
+      
+      canvas.addNode(testNode1);
+      canvas.addNode(testNode2);
+      
+      // Create a test connection between them
+      console.log('Node1 position:', testNode1.position, 'center:', testNode1.getCenter());
+      console.log('Node2 position:', testNode2.position, 'center:', testNode2.getCenter());
+      
+      const testConnector1 = canvas.createConnector("test-node-1", "test-node-2");
+      const testConnector2 = canvas.createConnector("test-node-2", "test-node-1");
+      
+      // Force different connection sides to make both visible
+      if (testConnector1) {
+        testConnector1.startPoint.side = ConnectionSide.RIGHT;
+        testConnector1.endPoint.side = ConnectionSide.LEFT;
+      }
+      if (testConnector2) {
+        testConnector2.startPoint.side = ConnectionSide.TOP;
+        testConnector2.endPoint.side = ConnectionSide.BOTTOM;
+      }
+      
+      // Configure first connector
+      if (testConnector1) {
+        testConnector1.style.arrowStart = false;
+        testConnector1.style.arrowEnd = true;
+      }
+      
+      // Configure second connector (opposite direction)
+      if (testConnector2) {
+        testConnector2.style.arrowStart = false;
+        testConnector2.style.arrowEnd = true;
+      }
+      
+      console.log('Created test connectors:', testConnector1, testConnector2);
+      
+      // Make sure initial positions are calculated
+      if (testConnector1 && testConnector2) {
+        canvas.moveNode("test-node-1", testNode1.position); // Force position update
+        canvas.moveNode("test-node-2", testNode2.position); // Force position update
+      }
+      
+      refresh(); // Trigger re-render after adding nodes and connector
     }
   }, [canvas, refresh]);
 
@@ -68,6 +119,12 @@ export default function Home() {
     });
   };
 
+  const handleSkirtClick = (event: React.MouseEvent, nodeId: string) => {
+    event.preventDefault();
+    console.log('Skirt clicked on node:', nodeId);
+    // TODO: Implement connection creation logic
+  };
+
   const handleMouseMove = (event: React.MouseEvent) => {
     if (!dragState.isDragging || !canvas || !dragState.nodeId) return;
 
@@ -80,6 +137,17 @@ export default function Home() {
     };
 
     canvas.moveNode(dragState.nodeId, newPosition);
+    
+    // Log connector positions for debugging
+    const connectors = canvas.getAllConnectors();
+    connectors.forEach(connector => {
+      if (connector.isConnectedToNode(dragState.nodeId)) {
+        console.log(`Connector ${connector.id}:`);
+        console.log(`  Start: nodeId=${connector.startPoint.nodeId}, absolutePos=`, connector.startPoint.absolutePosition);
+        console.log(`  End: nodeId=${connector.endPoint.nodeId}, absolutePos=`, connector.endPoint.absolutePosition);
+      }
+    });
+    
     refresh();
   };
 
@@ -140,13 +208,58 @@ export default function Home() {
             <Plus className="h-4 w-4" />
           </Button>
           
+          {/* Render Connectors */}
+          <svg
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'none',
+              zIndex: 5 // Between grid (0) and nodes (10)
+            }}
+          >
+            {connectors.map((connector) => {
+              const startNode = canvas?.getNode(connector.startPoint.nodeId);
+              const endNode = canvas?.getNode(connector.endPoint.nodeId);
+              
+              if (!startNode || !endNode) return null;
+              
+              // Use stored absolutePosition if available, otherwise calculate fresh
+              const startPosition = connector.startPoint.absolutePosition || ConnectionUtils.calculateConnectionPoint(
+                startNode.position,
+                startNode.size,
+                connector.startPoint.side,
+                connector.startPoint.offset
+              );
+              
+              const endPosition = connector.endPoint.absolutePosition || ConnectionUtils.calculateConnectionPoint(
+                endNode.position,
+                endNode.size,
+                connector.endPoint.side,
+                connector.endPoint.offset
+              );
+              
+              return (
+                <ConnectorComponent
+                  key={connector.id}
+                  connector={connector}
+                  startPosition={startPosition}
+                  endPosition={endPosition}
+                />
+              );
+            })}
+          </svg>
+          
           {/* Render Nodes */}
           {nodes.map((node) => (
             <NodeComponent
               key={node.id}
               node={node}
               zoom={viewport.zoom}
-              onMouseDown={handleNodeMouseDown}
+              onNodeMouseDown={handleNodeMouseDown}
+              onSkirtClick={handleSkirtClick}
             />
           ))}
         </div>
