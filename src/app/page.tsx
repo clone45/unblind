@@ -18,6 +18,14 @@ interface DragState {
   startNodePos: { x: number; y: number };
 }
 
+interface EndpointDragState {
+  isDragging: boolean;
+  connectorId: string | null;
+  endpointType: 'start' | 'end' | null;
+  startMousePos: { x: number; y: number };
+  originalConnectionPoint: { side: ConnectionSide; offset: number } | null;
+}
+
 export default function Home() {
   const { canvas, nodes, connectors, viewport, refresh } = useCanvas();
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
@@ -27,6 +35,13 @@ export default function Home() {
     nodeId: null,
     startMousePos: { x: 0, y: 0 },
     startNodePos: { x: 0, y: 0 }
+  });
+  const [endpointDragState, setEndpointDragState] = useState<EndpointDragState>({
+    isDragging: false,
+    connectorId: null,
+    endpointType: null,
+    startMousePos: { x: 0, y: 0 },
+    originalConnectionPoint: null
   });
 
   // Update canvas size on window resize
@@ -126,6 +141,29 @@ export default function Home() {
     // TODO: Implement connection creation logic
   };
 
+  const handleEndpointMouseDown = (event: React.MouseEvent, connectorId: string, endpointType: 'start' | 'end') => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const connector = canvas?.getConnector(connectorId);
+    if (!connector) return;
+
+    const connectionPoint = endpointType === 'start' ? connector.startPoint : connector.endPoint;
+    
+    console.log('Starting endpoint drag:', connectorId, endpointType);
+    
+    setEndpointDragState({
+      isDragging: true,
+      connectorId,
+      endpointType,
+      startMousePos: { x: event.clientX, y: event.clientY },
+      originalConnectionPoint: {
+        side: connectionPoint.side,
+        offset: connectionPoint.offset
+      }
+    });
+  };
+
   const handleMouseMove = (event: React.MouseEvent) => {
     // Get mouse position relative to canvas
     const rect = event.currentTarget.getBoundingClientRect();
@@ -133,14 +171,11 @@ export default function Home() {
     const mouseY = event.clientY - rect.top;
     setMousePosition({ x: mouseX, y: mouseY });
 
-    // Debug: Check for collisions
+    // Get hovered endpoints for cursor and visual feedback
     const hoveredEndpoints = getHoveredEndpoints();
-    if (hoveredEndpoints.length > 0) {
-      console.log('Hovering over connector endpoints:', hoveredEndpoints.map(e => `${e.connectorId}-${e.point}`));
-    }
 
-    // Handle node dragging
-    if (!dragState.isDragging || !canvas || !dragState.nodeId) return;
+    // Handle node dragging (only if not dragging endpoint)
+    if (!dragState.isDragging || !canvas || !dragState.nodeId || endpointDragState.isDragging) return;
 
     const deltaX = event.clientX - dragState.startMousePos.x;
     const deltaY = event.clientY - dragState.startMousePos.y;
@@ -173,6 +208,73 @@ export default function Home() {
         startMousePos: { x: 0, y: 0 },
         startNodePos: { x: 0, y: 0 }
       });
+    }
+    
+    if (endpointDragState.isDragging) {
+      handleEndpointDrop();
+    }
+  };
+
+  const handleEndpointDrop = () => {
+    if (!canvas || !endpointDragState.connectorId || !endpointDragState.endpointType) return;
+
+    const connector = canvas.getConnector(endpointDragState.connectorId);
+    if (!connector) return;
+
+    // Check if dropping on a valid node skirt
+    const targetNode = getNodeAtPosition(mousePosition);
+    
+    if (targetNode) {
+      // Calculate the new connection point
+      const newConnectionPoint = calculateConnectionPoint(targetNode, mousePosition);
+      
+      if (newConnectionPoint) {
+        // Update the connector
+        if (endpointDragState.endpointType === 'start') {
+          connector.updateStartPoint(targetNode.id, newConnectionPoint.side, newConnectionPoint.offset);
+        } else {
+          connector.updateEndPoint(targetNode.id, newConnectionPoint.side, newConnectionPoint.offset);
+        }
+        
+        // Update the absolute position
+        canvas.moveNode(targetNode.id, targetNode.position); // Force recalculation
+        
+        console.log('Endpoint dropped successfully on node:', targetNode.id, newConnectionPoint);
+      } else {
+        console.log('Invalid drop position - reverting to original');
+        revertEndpointPosition();
+      }
+    } else {
+      console.log('Dropped outside valid target - reverting to original');
+      revertEndpointPosition();
+    }
+    
+    // Reset drag state
+    setEndpointDragState({
+      isDragging: false,
+      connectorId: null,
+      endpointType: null,
+      startMousePos: { x: 0, y: 0 },
+      originalConnectionPoint: null
+    });
+    
+    refresh();
+  };
+
+  const revertEndpointPosition = () => {
+    if (!canvas || !endpointDragState.connectorId || !endpointDragState.originalConnectionPoint) return;
+
+    const connector = canvas.getConnector(endpointDragState.connectorId);
+    if (!connector) return;
+
+    // Revert to original position
+    const originalPoint = endpointDragState.originalConnectionPoint;
+    if (endpointDragState.endpointType === 'start') {
+      connector.startPoint.side = originalPoint.side;
+      connector.startPoint.offset = originalPoint.offset;
+    } else {
+      connector.endPoint.side = originalPoint.side;
+      connector.endPoint.offset = originalPoint.offset;
     }
   };
 
@@ -233,6 +335,88 @@ export default function Home() {
 
   const hoveredEndpoints = getHoveredEndpoints();
   const isHoveringEndpoint = hoveredEndpoints.length > 0;
+
+  // Get drag preview line data
+  const getDragPreviewLine = () => {
+    if (!endpointDragState.isDragging || !canvas || !endpointDragState.connectorId) return null;
+
+    const connector = canvas.getConnector(endpointDragState.connectorId);
+    if (!connector) return null;
+
+    // Get the fixed endpoint position (the one we're NOT dragging)
+    const fixedEndpoint = endpointDragState.endpointType === 'start' ? 'end' : 'start';
+    const fixedPoint = fixedEndpoint === 'start' ? connector.startPoint : connector.endPoint;
+    
+    if (!fixedPoint.absolutePosition) return null;
+
+    return {
+      fixedPosition: fixedPoint.absolutePosition,
+      currentPosition: mousePosition,
+      connectorId: endpointDragState.connectorId,
+      draggingEndpoint: endpointDragState.endpointType
+    };
+  };
+
+  // Check if mouse position is over a node (including skirt area)
+  const getNodeAtPosition = (position: { x: number; y: number }) => {
+    for (const node of nodes) {
+      const skirtPadding = 16; // Same as NodeComponent
+      const bounds = {
+        x: node.position.x - skirtPadding,
+        y: node.position.y - skirtPadding,
+        width: node.size.width + (skirtPadding * 2),
+        height: node.size.height + (skirtPadding * 2)
+      };
+      
+      if (position.x >= bounds.x && 
+          position.x <= bounds.x + bounds.width &&
+          position.y >= bounds.y && 
+          position.y <= bounds.y + bounds.height) {
+        return node;
+      }
+    }
+    return null;
+  };
+
+  // Calculate connection point from drop position
+  const calculateConnectionPoint = (node: DiagramNode, dropPosition: { x: number; y: number }) => {
+    const nodeCenter = {
+      x: node.position.x + node.size.width / 2,
+      y: node.position.y + node.size.height / 2
+    };
+
+    // Determine which side of the node the drop occurred on
+    const relativeX = dropPosition.x - nodeCenter.x;
+    const relativeY = dropPosition.y - nodeCenter.y;
+    
+    const absX = Math.abs(relativeX);
+    const absY = Math.abs(relativeY);
+    
+    let side: ConnectionSide;
+    let offset: number;
+    
+    if (absX > absY) {
+      // Horizontal sides
+      if (relativeX > 0) {
+        side = ConnectionSide.RIGHT;
+        offset = Math.max(0, Math.min(1, (dropPosition.y - node.position.y) / node.size.height));
+      } else {
+        side = ConnectionSide.LEFT;
+        offset = Math.max(0, Math.min(1, (dropPosition.y - node.position.y) / node.size.height));
+      }
+    } else {
+      // Vertical sides
+      if (relativeY > 0) {
+        side = ConnectionSide.BOTTOM;
+        offset = Math.max(0, Math.min(1, (dropPosition.x - node.position.x) / node.size.width));
+      } else {
+        side = ConnectionSide.TOP;
+        offset = Math.max(0, Math.min(1, (dropPosition.x - node.position.x) / node.size.width));
+      }
+    }
+    
+    return { side, offset };
+  };
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -322,7 +506,7 @@ export default function Home() {
             />
           ))}
           
-          {/* Render Endpoint Hover Circles */}
+          {/* Render Endpoint Hover Circles and Drag Preview */}
           <svg
             style={{
               position: 'absolute',
@@ -334,7 +518,37 @@ export default function Home() {
               zIndex: 15 // Above nodes (10) and connectors (5)
             }}
           >
-            {getHoveredEndpoints().map((endpoint, index) => (
+            {/* Drag Preview Line */}
+            {(() => {
+              const previewLine = getDragPreviewLine();
+              if (!previewLine) return null;
+              
+              return (
+                <g>
+                  <line
+                    x1={previewLine.fixedPosition.x}
+                    y1={previewLine.fixedPosition.y}
+                    x2={previewLine.currentPosition.x}
+                    y2={previewLine.currentPosition.y}
+                    stroke="rgba(59, 130, 246, 0.7)"
+                    strokeWidth="2"
+                    strokeDasharray="5,5"
+                  />
+                  {/* Show a circle at the dragged endpoint position */}
+                  <circle
+                    cx={previewLine.currentPosition.x}
+                    cy={previewLine.currentPosition.y}
+                    r={6}
+                    fill="rgba(59, 130, 246, 0.8)"
+                    stroke="rgba(59, 130, 246, 1)"
+                    strokeWidth="2"
+                  />
+                </g>
+              );
+            })()}
+            
+            {/* Endpoint Hover Circles */}
+            {hoveredEndpoints.map((endpoint, index) => (
               <circle
                 key={`${endpoint.connectorId}-${endpoint.point}-${index}`}
                 cx={endpoint.position.x}
@@ -343,6 +557,8 @@ export default function Home() {
                 fill="rgba(0, 0, 0, 0.3)"
                 stroke="rgba(0, 0, 0, 0.6)"
                 strokeWidth="2"
+                style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+                onMouseDown={(e) => handleEndpointMouseDown(e as any, endpoint.connectorId, endpoint.point)}
               />
             ))}
           </svg>
