@@ -33,6 +33,7 @@ export default function Home() {
     startMousePos: { x: 0, y: 0 },
     startNodePos: { x: 0, y: 0 }
   });
+  const [hoveredEndpoint, setHoveredEndpoint] = useState<{ connectorId: string; endpointType: 'start' | 'end' } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   
   // Use the endpoint drag hook
@@ -167,6 +168,37 @@ export default function Home() {
     const mouseY = event.clientY - rect.top;
     setMousePosition({ x: mouseX, y: mouseY });
 
+    // Clear hovered endpoint if mouse moves away from the associated node's skirt area
+    if (hoveredEndpoint && canvas) {
+      const connector = canvas.getConnector(hoveredEndpoint.connectorId);
+      if (connector) {
+        const relevantNodeId = hoveredEndpoint.endpointType === 'start' 
+          ? connector.startPoint.nodeId 
+          : connector.endPoint.nodeId;
+        
+        const relevantNode = canvas.getNode(relevantNodeId);
+        if (relevantNode) {
+          const skirtPadding = 16; // Same as NodeComponent
+          const skirtBounds = {
+            x: relevantNode.position.x - skirtPadding,
+            y: relevantNode.position.y - skirtPadding,
+            width: relevantNode.size.width + (skirtPadding * 2),
+            height: relevantNode.size.height + (skirtPadding * 2)
+          };
+          
+          const isMouseInSkirtArea = 
+            mouseX >= skirtBounds.x && 
+            mouseX <= skirtBounds.x + skirtBounds.width &&
+            mouseY >= skirtBounds.y && 
+            mouseY <= skirtBounds.y + skirtBounds.height;
+          
+          if (!isMouseInSkirtArea) {
+            setHoveredEndpoint(null);
+          }
+        }
+      }
+    }
+
     // Handle node dragging (only if not dragging endpoint or creating connection)
     if (!dragState.isDragging || !canvas || !dragState.nodeId || endpointDragState.isDragging || connectionCreationState.isCreating) return;
 
@@ -230,8 +262,21 @@ export default function Home() {
   };
 
 
-  const hoveredEndpoints = getHoveredEndpoints(connectors, mousePosition);
+  // Hide all endpoint detection when creating connections or repositioning endpoints
+  const shouldShowEndpoints = !connectionCreationState.isCreating && !endpointDragState.isDragging;
+  const availableConnectors = shouldShowEndpoints ? connectors : [];
+  
+  const hoveredEndpoints = getHoveredEndpoints(availableConnectors, mousePosition);
   const isHoveringEndpoint = hoveredEndpoints.length > 0;
+  
+  // Handle endpoint hover events
+  const handleEndpointHover = (connectorId: string, endpointType: 'start' | 'end') => {
+    setHoveredEndpoint({ connectorId, endpointType });
+  };
+  
+  const handleEndpointHoverEnd = () => {
+    setHoveredEndpoint(null);
+  };
   
   // Determine cursor style based on current state
   const getCursorStyle = () => {
@@ -325,16 +370,36 @@ export default function Home() {
           </svg>
           
           {/* Render Nodes */}
-          {nodes.map((node) => (
-            <NodeComponent
-              key={node.id}
-              node={node}
-              zoom={viewport.zoom}
-              onNodeMouseDown={handleNodeMouseDown}
-              onSkirtMouseDown={handleSkirtMouseDown}
-              suppressSkirtHover={isHoveringEndpoint || (connectionCreationState.isCreating && connectionCreationState.startNodeId === node.id)}
-            />
-          ))}
+          {nodes.map((node) => {
+            // Check if this node should show skirt due to hovered endpoint
+            const shouldShowSkirtForHoveredEndpoint = hoveredEndpoint && canvas ? (() => {
+              const connector = canvas.getConnector(hoveredEndpoint.connectorId);
+              if (!connector) return false;
+              
+              const relevantNodeId = hoveredEndpoint.endpointType === 'start' 
+                ? connector.startPoint.nodeId 
+                : connector.endPoint.nodeId;
+              
+              return relevantNodeId === node.id;
+            })() : false;
+            
+            const shouldSuppressSkirtHover = !shouldShowSkirtForHoveredEndpoint && (
+              isHoveringEndpoint || 
+              (connectionCreationState.isCreating && connectionCreationState.startNodeId === node.id)
+            );
+            
+            return (
+              <NodeComponent
+                key={node.id}
+                node={node}
+                zoom={viewport.zoom}
+                onNodeMouseDown={handleNodeMouseDown}
+                onSkirtMouseDown={handleSkirtMouseDown}
+                suppressSkirtHover={shouldSuppressSkirtHover}
+                forceSkirtHover={shouldShowSkirtForHoveredEndpoint}
+              />
+            );
+          })}
           
           {/* Render Endpoint Hover Circles and Drag Preview */}
           <EndpointOverlay
@@ -342,6 +407,8 @@ export default function Home() {
             dragPreviewLine={getDragPreviewLine()}
             connectionPreviewLine={getConnectionPreviewLine()}
             onEndpointMouseDown={handleEndpointMouseDown}
+            onEndpointHover={handleEndpointHover}
+            onEndpointHoverEnd={handleEndpointHoverEnd}
           />
         </div>
       </div>

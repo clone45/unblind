@@ -18,13 +18,17 @@ interface EndpointOverlayProps {
     startNodeId: string;
   } | null;
   onEndpointMouseDown: (event: React.MouseEvent, connectorId: string, endpointType: 'start' | 'end') => void;
+  onEndpointHover?: (connectorId: string, endpointType: 'start' | 'end') => void;
+  onEndpointHoverEnd?: () => void;
 }
 
 export const EndpointOverlay: React.FC<EndpointOverlayProps> = ({
   hoveredEndpoints,
   dragPreviewLine,
   connectionPreviewLine,
-  onEndpointMouseDown
+  onEndpointMouseDown,
+  onEndpointHover,
+  onEndpointHoverEnd
 }) => {
   return (
     <svg
@@ -107,6 +111,8 @@ export const EndpointOverlay: React.FC<EndpointOverlayProps> = ({
           strokeWidth="2"
           style={{ pointerEvents: 'auto', cursor: 'pointer' }}
           onMouseDown={(e) => onEndpointMouseDown(e as any, endpoint.connectorId, endpoint.point)}
+          onMouseEnter={() => onEndpointHover?.(endpoint.connectorId, endpoint.point)}
+          onMouseLeave={() => onEndpointHoverEnd?.()}
         />
       ))}
     </svg>

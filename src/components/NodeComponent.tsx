@@ -7,9 +7,10 @@ interface NodeComponentProps {
   onNodeMouseDown?: (event: React.MouseEvent, nodeId: string) => void;
   onSkirtMouseDown?: (event: React.MouseEvent, nodeId: string) => void;
   suppressSkirtHover?: boolean;
+  forceSkirtHover?: boolean;
 }
 
-export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNodeMouseDown, onSkirtMouseDown, suppressSkirtHover = false }) => {
+export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNodeMouseDown, onSkirtMouseDown, suppressSkirtHover = false, forceSkirtHover = false }) => {
   const { position, size, title, type, selected, color } = node;
   const [isHovered, setIsHovered] = useState(false);
 
@@ -38,11 +39,11 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNode
     width: '100%',
     height: '100%',
     borderRadius: type === NodeType.CIRCLE ? '50%' : type === NodeType.DIAMOND ? '0' : '12px',
-    backgroundColor: (isHovered && !suppressSkirtHover) ? 'rgba(107, 114, 128, 0.3)' : 'rgba(107, 114, 128, 0)', // Gray visible on hover unless suppressed
+    backgroundColor: (forceSkirtHover || (isHovered && !suppressSkirtHover)) ? 'rgba(107, 114, 128, 0.3)' : 'rgba(107, 114, 128, 0)', // Gray visible on hover unless suppressed
     cursor: suppressSkirtHover ? 'pointer' : 'crosshair', // Pointer when endpoint is detected, crosshair for skirt
     transform: type === NodeType.DIAMOND ? 'rotate(45deg)' : 'none',
     transformOrigin: 'center',
-    transition: (isHovered && !suppressSkirtHover) ? 'none' : 'background-color 0.9s ease-out', // Fade out on leave, instant on enter
+    transition: (forceSkirtHover || (isHovered && !suppressSkirtHover)) ? 'none' : 'background-color 0.9s ease-out', // Fade out on leave, instant on enter
   };
 
   const nodeStyle: React.CSSProperties = {
