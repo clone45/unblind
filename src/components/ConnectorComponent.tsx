@@ -6,12 +6,14 @@ interface ConnectorComponentProps {
   connector: DiagramConnector;
   startPosition: Position;
   endPosition: Position;
+  visible?: boolean;
 }
 
 export const ConnectorComponent: React.FC<ConnectorComponentProps> = ({ 
   connector, 
   startPosition, 
-  endPosition 
+  endPosition,
+  visible = true
 }) => {
   const { style, type, selected, label } = connector;
 
@@ -96,6 +98,10 @@ export const ConnectorComponent: React.FC<ConnectorComponentProps> = ({
       />
     );
   };
+
+  if (!visible) {
+    return null;
+  }
 
   return (
     <g>

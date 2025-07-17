@@ -5,11 +5,11 @@ interface NodeComponentProps {
   node: DiagramNode;
   zoom: number;
   onNodeMouseDown?: (event: React.MouseEvent, nodeId: string) => void;
-  onSkirtClick?: (event: React.MouseEvent, nodeId: string) => void;
+  onSkirtMouseDown?: (event: React.MouseEvent, nodeId: string) => void;
   suppressSkirtHover?: boolean;
 }
 
-export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNodeMouseDown, onSkirtClick, suppressSkirtHover = false }) => {
+export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNodeMouseDown, onSkirtMouseDown, suppressSkirtHover = false }) => {
   const { position, size, title, type, selected, color } = node;
   const [isHovered, setIsHovered] = useState(false);
 
@@ -77,10 +77,10 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNode
     textAlign: 'center',
   };
 
-  const handleSkirtClick = (event: React.MouseEvent) => {
+  const handleSkirtMouseDown = (event: React.MouseEvent) => {
     event.stopPropagation();
-    if (onSkirtClick) {
-      onSkirtClick(event, node.id);
+    if (onSkirtMouseDown) {
+      onSkirtMouseDown(event, node.id);
     }
   };
 
@@ -96,7 +96,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNode
       {/* Skirt - for connection creation */}
       <div 
         style={skirtStyle}
-        onClick={handleSkirtClick}
+        onMouseDown={handleSkirtMouseDown}
         onMouseEnter={() => {
           if (!suppressSkirtHover) {
             console.log('Skirt hover ENTER on node:', node.id);
