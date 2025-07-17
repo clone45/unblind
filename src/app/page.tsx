@@ -21,6 +21,7 @@ interface DragState {
 export default function Home() {
   const { canvas, nodes, connectors, viewport, refresh } = useCanvas();
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [dragState, setDragState] = useState<DragState>({
     isDragging: false,
     nodeId: null,
@@ -44,7 +45,7 @@ export default function Home() {
 
   // Add test nodes and connection when canvas is ready
   useEffect(() => {
-    if (canvas) {
+    if (canvas && canvas.getAllNodes().length === 0) { // Only create if no nodes exist
       // Create two test nodes
       const testNode1 = new DiagramNode(
         "test-node-1",
@@ -126,6 +127,19 @@ export default function Home() {
   };
 
   const handleMouseMove = (event: React.MouseEvent) => {
+    // Get mouse position relative to canvas
+    const rect = event.currentTarget.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+    setMousePosition({ x: mouseX, y: mouseY });
+
+    // Debug: Check for collisions
+    const hoveredEndpoints = getHoveredEndpoints();
+    if (hoveredEndpoints.length > 0) {
+      console.log('Hovering over connector endpoints:', hoveredEndpoints.map(e => `${e.connectorId}-${e.point}`));
+    }
+
+    // Handle node dragging
     if (!dragState.isDragging || !canvas || !dragState.nodeId) return;
 
     const deltaX = event.clientX - dragState.startMousePos.x;
@@ -177,12 +191,56 @@ export default function Home() {
     refresh();
   };
 
+  // Get connector endpoints that are near the mouse
+  const getHoveredEndpoints = () => {
+    const hoveredEndpoints: Array<{ connectorId: string; point: 'start' | 'end'; position: { x: number; y: number } }> = [];
+    const hoverRadius = 15; // Pixels
+
+    connectors.forEach(connector => {
+      // Check start point
+      if (connector.startPoint.absolutePosition) {
+        const distance = Math.sqrt(
+          Math.pow(mousePosition.x - connector.startPoint.absolutePosition.x, 2) +
+          Math.pow(mousePosition.y - connector.startPoint.absolutePosition.y, 2)
+        );
+        if (distance <= hoverRadius) {
+          hoveredEndpoints.push({
+            connectorId: connector.id,
+            point: 'start',
+            position: connector.startPoint.absolutePosition
+          });
+        }
+      }
+
+      // Check end point
+      if (connector.endPoint.absolutePosition) {
+        const distance = Math.sqrt(
+          Math.pow(mousePosition.x - connector.endPoint.absolutePosition.x, 2) +
+          Math.pow(mousePosition.y - connector.endPoint.absolutePosition.y, 2)
+        );
+        if (distance <= hoverRadius) {
+          hoveredEndpoints.push({
+            connectorId: connector.id,
+            point: 'end',
+            position: connector.endPoint.absolutePosition
+          });
+        }
+      }
+    });
+
+    return hoveredEndpoints;
+  };
+
+  const hoveredEndpoints = getHoveredEndpoints();
+  const isHoveringEndpoint = hoveredEndpoints.length > 0;
+
   return (
     <div className="min-h-screen bg-background flex">
       {/* Left Column - Canvas/Container */}
       <div className="flex-1 border-r border-border relative">
         <div 
           className="absolute inset-0 bg-muted/20"
+          style={{ cursor: isHoveringEndpoint ? 'pointer' : 'default' }}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
         >
@@ -260,8 +318,34 @@ export default function Home() {
               zoom={viewport.zoom}
               onNodeMouseDown={handleNodeMouseDown}
               onSkirtClick={handleSkirtClick}
+              suppressSkirtHover={isHoveringEndpoint}
             />
           ))}
+          
+          {/* Render Endpoint Hover Circles */}
+          <svg
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'none',
+              zIndex: 15 // Above nodes (10) and connectors (5)
+            }}
+          >
+            {getHoveredEndpoints().map((endpoint, index) => (
+              <circle
+                key={`${endpoint.connectorId}-${endpoint.point}-${index}`}
+                cx={endpoint.position.x}
+                cy={endpoint.position.y}
+                r={12}
+                fill="rgba(0, 0, 0, 0.3)"
+                stroke="rgba(0, 0, 0, 0.6)"
+                strokeWidth="2"
+              />
+            ))}
+          </svg>
         </div>
       </div>
       

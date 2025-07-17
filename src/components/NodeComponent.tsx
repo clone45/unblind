@@ -6,11 +6,19 @@ interface NodeComponentProps {
   zoom: number;
   onNodeMouseDown?: (event: React.MouseEvent, nodeId: string) => void;
   onSkirtClick?: (event: React.MouseEvent, nodeId: string) => void;
+  suppressSkirtHover?: boolean;
 }
 
-export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNodeMouseDown, onSkirtClick }) => {
+export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNodeMouseDown, onSkirtClick, suppressSkirtHover = false }) => {
   const { position, size, title, type, selected, color } = node;
   const [isHovered, setIsHovered] = useState(false);
+
+  // Force unhover when endpoint detection is active
+  React.useEffect(() => {
+    if (suppressSkirtHover && isHovered) {
+      setIsHovered(false);
+    }
+  }, [suppressSkirtHover, isHovered]);
 
   const skirtPadding = 16; // Padding around the node for the skirt
 
@@ -30,11 +38,11 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNode
     width: '100%',
     height: '100%',
     borderRadius: type === NodeType.CIRCLE ? '50%' : type === NodeType.DIAMOND ? '0' : '12px',
-    backgroundColor: isHovered ? 'rgba(107, 114, 128, 0.3)' : 'rgba(107, 114, 128, 0)', // Gray visible on hover
-    cursor: 'crosshair',
+    backgroundColor: (isHovered && !suppressSkirtHover) ? 'rgba(107, 114, 128, 0.3)' : 'rgba(107, 114, 128, 0)', // Gray visible on hover unless suppressed
+    cursor: suppressSkirtHover ? 'pointer' : 'crosshair', // Pointer when endpoint is detected, crosshair for skirt
     transform: type === NodeType.DIAMOND ? 'rotate(45deg)' : 'none',
     transformOrigin: 'center',
-    transition: isHovered ? 'none' : 'background-color 0.9s ease-out', // Fade out on leave, instant on enter
+    transition: (isHovered && !suppressSkirtHover) ? 'none' : 'background-color 0.9s ease-out', // Fade out on leave, instant on enter
   };
 
   const nodeStyle: React.CSSProperties = {
@@ -89,8 +97,18 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNode
       <div 
         style={skirtStyle}
         onClick={handleSkirtClick}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={() => {
+          if (!suppressSkirtHover) {
+            console.log('Skirt hover ENTER on node:', node.id);
+            setIsHovered(true);
+          }
+        }}
+        onMouseLeave={() => {
+          if (!suppressSkirtHover) {
+            console.log('Skirt hover LEAVE on node:', node.id);
+            setIsHovered(false);
+          }
+        }}
       />
       
       {/* Node Body - for dragging */}
