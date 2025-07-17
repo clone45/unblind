@@ -120,3 +120,65 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  /* Custom animation for connector pulsing effect */
+  @keyframes connector-pulse {
+    0%, 100% {
+      stroke-width: var(--pulse-base-width);
+      opacity: 1;
+    }
+    50% {
+      stroke-width: calc(var(--pulse-base-width) * 2.5);
+      opacity: 0.6;
+    }
+  }
+  
+  .animate-connector-pulse {
+    animation: connector-pulse 2s ease-in-out infinite;
+  }
+  
+  /* Custom animation for trace particles */
+  @keyframes trace-particle {
+    0% {
+      transform: translateX(var(--start-x)) translateY(var(--start-y));
+      opacity: 0;
+    }
+    10% {
+      opacity: 1;
+    }
+    90% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(var(--end-x)) translateY(var(--end-y));
+      opacity: 0;
+    }
+  }
+  
+  .animate-trace-particle {
+    animation: trace-particle 1.5s ease-in-out infinite;
+  }
+  
+  /* Custom animation for bidirectional trace particles */
+  @keyframes bidirectional-trace-particle {
+    0% {
+      transform: translateX(var(--start-x)) translateY(var(--start-y));
+      opacity: 0;
+    }
+    10% {
+      opacity: 1;
+    }
+    90% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(var(--end-x)) translateY(var(--end-y));
+      opacity: 0;
+    }
+  }
+  
+  .animate-bidirectional-trace-particle {
+    animation: bidirectional-trace-particle 2s ease-in-out infinite;
+  }
+}

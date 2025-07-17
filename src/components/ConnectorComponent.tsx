@@ -35,32 +35,40 @@ export const ConnectorComponent: React.FC<ConnectorComponentProps> = ({
     
     let strokeWidth = style.width;
     let opacity = style.opacity;
+    let strokeColor = style.color;
     
     switch (logHighlight.type) {
       case 'highlight':
         strokeWidth = Math.max(style.width, 3);
         opacity = 1;
+        strokeColor = logHighlight.color || style.color;
         break;
       case 'focus':
         strokeWidth = Math.max(style.width, 5);
         opacity = 1;
+        strokeColor = logHighlight.color || style.color;
         break;
       case 'annotate':
         strokeWidth = Math.max(style.width, 2);
         opacity = 1;
+        strokeColor = logHighlight.color || style.color;
         break;
       case 'trace':
-        strokeWidth = Math.max(style.width, 4);
-        opacity = 1;
+      case 'bidirectional-trace':
+        // For trace effects, keep the default line styling - only show particles
+        strokeWidth = style.width;
+        opacity = style.opacity;
+        strokeColor = style.color;
         break;
       case 'pulse':
         strokeWidth = Math.max(style.width, 3);
         opacity = 0.8;
+        strokeColor = logHighlight.color || style.color;
         break;
     }
     
     return {
-      stroke: logHighlight.color || style.color,
+      stroke: strokeColor,
       strokeWidth,
       strokeDasharray: style.dashPattern?.join(' '),
       opacity
@@ -75,7 +83,8 @@ export const ConnectorComponent: React.FC<ConnectorComponentProps> = ({
       case 'pulse':
         return 'animate-pulse';
       case 'trace':
-        return 'animate-ping';
+      case 'bidirectional-trace':
+        return ''; // Trace effects use custom particle rendering
       default:
         return '';
     }
@@ -88,8 +97,102 @@ export const ConnectorComponent: React.FC<ConnectorComponentProps> = ({
     onConnectorClick?.(event, connector.id);
   };
 
+  // Render trace particles for flow visualization
+  const renderTraceParticles = () => {
+    if (logHighlight?.type !== 'trace' && logHighlight?.type !== 'bidirectional-trace') return null;
+
+    const particles = [];
+    const isBidirectional = logHighlight?.type === 'bidirectional-trace';
+    const numParticles = 3;
+    
+    if (isBidirectional) {
+      // For bidirectional, create particles going both ways
+      for (let i = 0; i < numParticles; i++) {
+        const delay = i * 0.7; // Stagger particles by 0.7s for bidirectional
+        
+        // Forward direction particles
+        const forwardParticleStyle = {
+          '--start-x': `${startPosition.x}px`,
+          '--start-y': `${startPosition.y}px`,
+          '--end-x': `${endPosition.x}px`,
+          '--end-y': `${endPosition.y}px`,
+          animationDelay: `${delay}s`
+        } as React.CSSProperties;
+        
+        // Backward direction particles
+        const backwardParticleStyle = {
+          '--start-x': `${endPosition.x}px`,
+          '--start-y': `${endPosition.y}px`,
+          '--end-x': `${startPosition.x}px`,
+          '--end-y': `${startPosition.y}px`,
+          animationDelay: `${delay + 0.35}s` // Offset backward particles
+        } as React.CSSProperties;
+        
+        particles.push(
+          <circle
+            key={`forward-particle-${i}`}
+            cx="0"
+            cy="0"
+            r="4"
+            fill={logHighlight.color || '#3b82f6'}
+            opacity="0.8"
+            style={forwardParticleStyle}
+            className="animate-bidirectional-trace-particle"
+          />
+        );
+        
+        particles.push(
+          <circle
+            key={`backward-particle-${i}`}
+            cx="0"
+            cy="0"
+            r="4"
+            fill={logHighlight.color || '#10b981'} // Different color for backward flow
+            opacity="0.8"
+            style={backwardParticleStyle}
+            className="animate-bidirectional-trace-particle"
+          />
+        );
+      }
+    } else {
+      // Regular unidirectional trace
+      for (let i = 0; i < numParticles; i++) {
+        const delay = i * 0.5; // Stagger particles by 0.5s
+        
+        const particleStyle = {
+          '--start-x': `${startPosition.x}px`,
+          '--start-y': `${startPosition.y}px`,
+          '--end-x': `${endPosition.x}px`,
+          '--end-y': `${endPosition.y}px`,
+          animationDelay: `${delay}s`
+        } as React.CSSProperties;
+        
+        particles.push(
+          <circle
+            key={`particle-${i}`}
+            cx="0"
+            cy="0"
+            r="4"
+            fill={logHighlight.color || '#3b82f6'}
+            opacity="0.8"
+            style={particleStyle}
+            className="animate-trace-particle"
+          />
+        );
+      }
+    }
+    
+    return particles;
+  };
+
   const renderLine = () => {
     const strokeProps = getLogHighlightStroke();
+    const animationClass = getAnimationClass();
+    
+    // Set CSS custom property for pulse animation base width (only for pulse type)
+    const lineStyle = logHighlight?.type === 'pulse' ? {
+      '--pulse-base-width': `${strokeProps.strokeWidth}px`
+    } as React.CSSProperties : {};
     
     switch (type) {
       case ConnectorType.STRAIGHT:
@@ -103,6 +206,8 @@ export const ConnectorComponent: React.FC<ConnectorComponentProps> = ({
             strokeWidth={strokeProps.strokeWidth}
             strokeDasharray={strokeProps.strokeDasharray}
             opacity={strokeProps.opacity}
+            className={animationClass}
+            style={lineStyle}
           />
         );
       
@@ -120,11 +225,27 @@ export const ConnectorComponent: React.FC<ConnectorComponentProps> = ({
             fill="none"
             strokeDasharray={strokeProps.strokeDasharray}
             opacity={strokeProps.opacity}
+            className={animationClass}
+            style={lineStyle}
           />
         );
       
       default:
-        return renderLine(); // Default to straight
+        // Default to straight line
+        return (
+          <line
+            x1={startPosition.x}
+            y1={startPosition.y}
+            x2={endPosition.x}
+            y2={endPosition.y}
+            stroke={strokeProps.stroke}
+            strokeWidth={strokeProps.strokeWidth}
+            strokeDasharray={strokeProps.strokeDasharray}
+            opacity={strokeProps.opacity}
+            className={animationClass}
+            style={lineStyle}
+          />
+        );
     }
   };
 
@@ -167,7 +288,20 @@ export const ConnectorComponent: React.FC<ConnectorComponentProps> = ({
         );
       
       default:
-        return renderHitArea(); // Default to straight
+        // Default to straight line hit area
+        return (
+          <line
+            x1={startPosition.x}
+            y1={startPosition.y}
+            x2={endPosition.x}
+            y2={endPosition.y}
+            stroke="transparent"
+            strokeWidth={hitAreaWidth}
+            style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+            onClick={handleConnectorClick}
+            onMouseDown={handleConnectorClick}
+          />
+        );
     }
   };
 
@@ -219,10 +353,8 @@ export const ConnectorComponent: React.FC<ConnectorComponentProps> = ({
     return null;
   }
 
-  const animationClass = getAnimationClass();
-
   return (
-    <g className={animationClass}>
+    <g>
       {/* Main line/curve */}
       {renderLine()}
       
@@ -231,6 +363,9 @@ export const ConnectorComponent: React.FC<ConnectorComponentProps> = ({
       
       {/* End arrow */}
       {style.arrowEnd && renderArrow(endPosition, false)}
+      
+      {/* Trace particles for flow visualization */}
+      {renderTraceParticles()}
       
       {/* Invisible hit area for clicking (rendered last to be on top) */}
       {onConnectorClick && renderHitArea()}

@@ -71,7 +71,8 @@ const mockLogEntries: LogEntry[] = [
     unblind: {
       actions: [
         { id: 'test-node-1', action: 'highlight', style: 'context' },
-        { id: 'test-node-2', action: 'trace' }
+        { id: 'test-node-2', action: 'highlight', style: 'context' },
+        { id: 'test-connector-1', action: 'trace' }
       ],
       data: {
         trace_type: 'connection_path',
@@ -100,7 +101,7 @@ const mockLogEntries: LogEntry[] = [
     message: 'Bidirectional communication established',
     unblind: {
       actions: [
-        { id: 'test-connector-1', action: 'trace' },
+        { id: 'test-connector-1', action: 'bidirectional-trace' },
         { id: 'test-connector-2', action: 'highlight', style: 'active' }
       ],
       data: {

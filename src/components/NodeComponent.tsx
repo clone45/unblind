@@ -31,6 +31,11 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({ node, zoom, onNode
     
     const styles: Partial<React.CSSProperties> = {};
     
+    // Check if this is an error state and apply red background
+    if (logHighlight.style === 'error') {
+      styles.backgroundColor = '#dc2626'; // Red background for error state
+    }
+    
     switch (logHighlight.type) {
       case 'highlight':
         styles.boxShadow = `0 0 0 3px ${logHighlight.color}40, 0 2px 4px rgba(0, 0, 0, 0.1)`;
