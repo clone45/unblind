@@ -233,15 +233,15 @@ export const LogViewer: React.FC<LogViewerProps> = ({ onLogEntrySelect }) => {
   };
 
   return (
-    <Card className="h-full log-viewer-card">
-      <CardHeader className="pb-3 log-viewer-header">
-        <CardTitle className="text-lg log-viewer-title">Log Entries</CardTitle>
+    <div className="h-full log-viewer-container">
+      <div className="pb-3 log-viewer-header">
+        <h3 className="text-lg font-semibold log-viewer-title">Log Entries</h3>
         <div className="text-sm text-muted-foreground log-viewer-subtitle">
           {logEntries.length} entries • Use ↑↓ to navigate
         </div>
-      </CardHeader>
-      <CardContent className="p-0 log-viewer-content">
-        <div className="max-h-96 overflow-y-auto log-entries-container">
+      </div>
+      <div className="flex-1 log-viewer-content">
+        <div className="h-full overflow-y-auto log-entries-container">
           {logEntries.map((entry, index) => (
             <div
               key={entry.id}
@@ -276,7 +276,7 @@ export const LogViewer: React.FC<LogViewerProps> = ({ onLogEntrySelect }) => {
             </pre>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 };

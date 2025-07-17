@@ -11,8 +11,8 @@ import { GridComponent } from "@/components/GridComponent";
 import { ConnectorComponent } from "@/components/ConnectorComponent";
 import { EndpointOverlay } from "@/components/EndpointOverlay";
 import { NodeEditor } from "@/components/NodeEditor";
-import { RightPanelTabs } from "@/components/RightPanelTabs";
 import { AnnotationOverlay } from "@/components/AnnotationOverlay";
+import { LogViewer } from "@/components/LogViewer";
 import { DiagramNode, NodeType } from "@/types/node";
 import { ConnectionUtils, ConnectionSide, DiagramConnector } from "@/types/connector";
 import { LogEntry } from "@/types/log";
@@ -43,6 +43,7 @@ export default function Home() {
   });
   const [hoveredEndpoint, setHoveredEndpoint] = useState<{ connectorId: string; endpointType: 'start' | 'end' } | null>(null);
   const [selectedLogEntry, setSelectedLogEntry] = useState<LogEntry | null>(null);
+  const [currentMode, setCurrentMode] = useState<'graph' | 'log'>('log');
   const canvasRef = useRef<HTMLDivElement>(null);
   
   // Use the endpoint drag hook
@@ -443,15 +444,41 @@ export default function Home() {
             />
           )}
           
-          {/* Plus Button in Top Left */}
-          <Button
-            size="sm"
-            className="absolute top-4 left-4 z-10"
-            variant="outline"
-            onClick={handleAddNode}
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
+          {/* Toolbar in Top Left */}
+          <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
+            {/* Mode Toggle Split Button */}
+            <div className="flex rounded-md shadow-sm" role="group">
+              <Button
+                size="sm"
+                variant={currentMode === 'log' ? 'default' : 'outline'}
+                className={`rounded-r-none border-r-0 ${currentMode === 'log' ? 'bg-blue-600 text-white' : ''}`}
+                onClick={() => setCurrentMode('log')}
+              >
+                Log Explorer
+              </Button>
+              <Button
+                size="sm"
+                variant={currentMode === 'graph' ? 'default' : 'outline'}
+                className={`rounded-l-none ${currentMode === 'graph' ? 'bg-blue-600 text-white' : ''}`}
+                onClick={() => setCurrentMode('graph')}
+              >
+                Graph Editor
+              </Button>
+            </div>
+            
+            {/* Graph Editor Tools - Only show in graph mode */}
+            {currentMode === 'graph' && (
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleAddNode}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
           
           {/* Render Connectors */}
           <svg
@@ -555,16 +582,38 @@ export default function Home() {
         </div>
       </div>
       
-      {/* Right Column - Tabbed Interface */}
+      {/* Right Column - Mode-based Interface */}
       <div className="w-80 bg-background border-l">
-        <RightPanelTabs
-          selectedNode={selectedNode}
-          selectedConnector={selectedConnector}
-          onUpdateNode={handleUpdateNode}
-          onUpdateConnector={handleUpdateConnector}
-          onLogEntrySelect={handleLogEntrySelect}
-          existingComponentIds={[...nodes.map(node => node.id), ...connectors.map(connector => connector.id)]}
-        />
+        {currentMode === 'log' ? (
+          <div className="h-full p-4">
+            <LogViewer onLogEntrySelect={handleLogEntrySelect} />
+          </div>
+        ) : (
+          <div className="h-full p-4">
+            {selectedNode ? (
+              <NodeEditor 
+                node={selectedNode} 
+                onUpdateNode={handleUpdateNode}
+                onUpdateConnector={handleUpdateConnector}
+                existingComponentIds={[...nodes.map(node => node.id), ...connectors.map(connector => connector.id)]}
+              />
+            ) : selectedConnector ? (
+              <NodeEditor 
+                connector={selectedConnector} 
+                onUpdateNode={handleUpdateNode}
+                onUpdateConnector={handleUpdateConnector}
+                existingComponentIds={[...nodes.map(node => node.id), ...connectors.map(connector => connector.id)]}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center text-gray-500">
+                  <p className="text-sm">No component selected</p>
+                  <p className="text-xs mt-1">Select a node or connector to edit its properties</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
