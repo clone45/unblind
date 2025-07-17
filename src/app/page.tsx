@@ -12,6 +12,7 @@ import { ConnectorComponent } from "@/components/ConnectorComponent";
 import { EndpointOverlay } from "@/components/EndpointOverlay";
 import { NodeEditor } from "@/components/NodeEditor";
 import { RightPanelTabs } from "@/components/RightPanelTabs";
+import { AnnotationOverlay } from "@/components/AnnotationOverlay";
 import { DiagramNode, NodeType } from "@/types/node";
 import { ConnectionUtils, ConnectionSide, DiagramConnector } from "@/types/connector";
 import { LogEntry } from "@/types/log";
@@ -397,6 +398,9 @@ export default function Home() {
   // Get log highlights from canvas
   const logHighlights = canvas?.getLogHighlights() || new Map();
   
+  // Get log annotations from canvas
+  const logAnnotations = canvas?.getLogAnnotations() || new Map();
+  
   // Handle endpoint hover events
   const handleEndpointHover = (connectorId: string, endpointType: 'start' | 'end') => {
     setHoveredEndpoint({ connectorId, endpointType });
@@ -540,6 +544,13 @@ export default function Home() {
             onEndpointMouseDown={handleEndpointMouseDown}
             onEndpointHover={handleEndpointHover}
             onEndpointHoverEnd={handleEndpointHoverEnd}
+          />
+          
+          {/* Render Annotations */}
+          <AnnotationOverlay
+            nodes={nodes}
+            connectors={connectors}
+            annotations={logAnnotations}
           />
         </div>
       </div>

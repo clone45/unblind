@@ -27,10 +27,11 @@ const mockLogEntries: LogEntry[] = [
       actions: [
         { id: 'test-node-1', action: 'pulse', style: 'warning' }
       ],
-      data: { 
+      data: {
         input: 'user_data',
         validation_type: 'schema_check',
-        status: 'processing'
+        status: 'processing',
+        emoji: '⚠️'
       }
     }
   },
@@ -60,7 +61,8 @@ const mockLogEntries: LogEntry[] = [
       data: {
         result: 'success',
         output: 'processed_data',
-        completion_time: '2024-01-15T18:30:02Z'
+        completion_time: '2024-01-15T18:30:02Z',
+        emoji: '✅'
       }
     }
   },
@@ -76,7 +78,8 @@ const mockLogEntries: LogEntry[] = [
       ],
       data: {
         trace_type: 'connection_path',
-        duration_ms: 120
+        duration_ms: 120,
+        emoji: '🔗'
       }
     }
   },
@@ -101,7 +104,7 @@ const mockLogEntries: LogEntry[] = [
     message: 'Bidirectional communication established',
     unblind: {
       actions: [
-        { id: 'test-connector-1', action: 'bidirectional-trace' },
+        { id: 'test-connector-1', action: 'trace' },
         { id: 'test-connector-2', action: 'highlight', style: 'active' }
       ],
       data: {
@@ -122,7 +125,38 @@ const mockLogEntries: LogEntry[] = [
       data: {
         error_type: 'validation_failed',
         error_message: 'Invalid input format',
-        recovery_action: 'retry'
+        recovery_action: 'retry',
+        emoji: '❌'
+      }
+    }
+  },
+  {
+    id: 'log-9',
+    timestamp: new Date('2024-01-15T10:30:07'),
+    message: 'Sending STOP command to TTS engine',
+    unblind: {
+      actions: [
+        { id: 'test-connector-1', action: 'annotate', annotation: 'Sending STOP to TTS engine...' }
+      ],
+      data: {
+        command: 'STOP',
+        target: 'tts_engine',
+        emoji: '🛑'
+      }
+    }
+  },
+  {
+    id: 'log-10',
+    timestamp: new Date('2024-01-15T10:30:08'),
+    message: 'Node processing user input',
+    unblind: {
+      actions: [
+        { id: 'test-node-1', action: 'annotate', annotation: 'Processing: "Hello world"' }
+      ],
+      data: {
+        input_text: 'Hello world',
+        processing_stage: 'tokenization',
+        emoji: '💭'
       }
     }
   }
@@ -170,10 +204,10 @@ export const LogViewer: React.FC<LogViewerProps> = ({ onLogEntrySelect }) => {
   };
 
   const formatTimestamp = (timestamp: Date) => {
-    return timestamp.toLocaleTimeString('en-US', { 
-      hour12: false, 
-      hour: '2-digit', 
-      minute: '2-digit', 
+    return timestamp.toLocaleTimeString('en-US', {
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
       second: '2-digit',
       fractionalSecondDigits: 3
     });
@@ -181,74 +215,63 @@ export const LogViewer: React.FC<LogViewerProps> = ({ onLogEntrySelect }) => {
 
   const getActionSummary = (entry: LogEntry) => {
     if (!entry.unblind?.actions) return '';
-    
+
     const actions = entry.unblind.actions;
     const highlights = actions.filter(a => a.action === 'highlight').length;
     const other = actions.filter(a => a.action !== 'highlight').length;
-    
+
     const parts = [];
     if (highlights > 0) parts.push(`${highlights} highlight${highlights > 1 ? 's' : ''}`);
     if (other > 0) parts.push(`${other} other${other > 1 ? 's' : ''}`);
-    
+
     return parts.join(', ');
   };
 
+  // Helper function to extract emoji from log data
+  const getLogEmoji = (entry: LogEntry): string | null => {
+    return entry.unblind?.data?.emoji || null;
+  };
+
   return (
-    <Card className="h-full">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg">Log Entries</CardTitle>
-        <div className="text-sm text-muted-foreground">
+    <Card className="h-full log-viewer-card">
+      <CardHeader className="pb-3 log-viewer-header">
+        <CardTitle className="text-lg log-viewer-title">Log Entries</CardTitle>
+        <div className="text-sm text-muted-foreground log-viewer-subtitle">
           {logEntries.length} entries • Use ↑↓ to navigate
         </div>
       </CardHeader>
-      <CardContent className="p-0">
-        <div className="max-h-96 overflow-y-auto">
+      <CardContent className="p-0 log-viewer-content">
+        <div className="max-h-96 overflow-y-auto log-entries-container">
           {logEntries.map((entry, index) => (
             <div
               key={entry.id}
               className={`
-                px-4 py-3 border-b cursor-pointer transition-colors
-                ${selectedIndex === index 
-                  ? 'bg-blue-50 border-blue-200' 
-                  : 'hover:bg-gray-50'
+                log-entry-item px-2 py-2 border-b cursor-pointer transition-colors
+                ${selectedIndex === index
+                  ? 'bg-blue-50 border-blue-200 log-entry-selected'
+                  : 'hover:bg-gray-50 log-entry-unselected'
                 }
               `}
               onClick={() => handleEntryClick(index)}
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-mono text-muted-foreground">
-                      {formatTimestamp(entry.timestamp)}
-                    </span>
-                    {entry.unblind?.actions && (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
-                        {getActionSummary(entry)}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-sm font-medium truncate">
-                    {entry.message || 'No message'}
-                  </div>
-                  {entry.unblind?.actions && (
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {entry.unblind.actions.map((action, actionIndex) => (
-                        <span key={actionIndex} className="mr-2">
-                          {Array.isArray(action.id) ? action.id.join(', ') : action.id}: {action.action}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
+              <div className="log-entry-content text-sm flex items-center gap-2">
+                {getLogEmoji(entry) && (
+                  <span className="log-entry-emoji" role="img" aria-label="log emoji">
+                    {getLogEmoji(entry)}
+                  </span>
+                )}
+                <span className="log-entry-message">
+                  {entry.message || 'No message'}
+                </span>
               </div>
             </div>
           ))}
         </div>
-        
+
         {selectedIndex !== null && logEntries[selectedIndex]?.unblind?.data && (
-          <div className="border-t p-4 bg-gray-50">
-            <div className="text-sm font-medium mb-2">Log Data:</div>
-            <pre className="text-xs bg-white p-2 rounded border overflow-auto max-h-32">
+          <div className="border-t p-4 bg-gray-50 log-entry-details">
+            <div className="text-sm font-medium mb-2 log-entry-details-title">Log Data:</div>
+            <pre className="text-xs bg-white p-2 rounded border overflow-auto max-h-32 log-entry-details-data">
               {JSON.stringify(logEntries[selectedIndex].unblind?.data, null, 2)}
             </pre>
           </div>

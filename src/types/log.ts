@@ -10,6 +10,7 @@ export interface LogAction {
   group?: string;
   action: 'highlight' | 'focus' | 'annotate' | 'trace' | 'pulse';
   style?: string;
+  annotation?: string; // Text to display as annotation when action is 'annotate'
 }
 
 export interface LogEntry {

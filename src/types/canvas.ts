@@ -44,6 +44,9 @@ export class DiagramCanvas {
   
   // Log highlights state (separate from user selection)
   private logHighlights: Map<string, LogHighlightStyle> = new Map();
+  
+  // Log annotations state (text annotations for elements)
+  private logAnnotations: Map<string, string> = new Map();
 
   constructor(width: number, height: number) {
     this.viewport = {
@@ -528,12 +531,18 @@ export class DiagramCanvas {
   // Log Highlight Methods
   applyLogActions(actions: LogAction[]): void {
     this.clearLogHighlights();
+    this.clearLogAnnotations();
     
     actions.forEach(action => {
       const processedAction = this.processLogAction(action);
       
       processedAction.targetIds.forEach(id => {
         this.logHighlights.set(id, processedAction.highlightStyle);
+        
+        // Handle annotations
+        if (action.action === 'annotate' && action.annotation) {
+          this.logAnnotations.set(id, action.annotation);
+        }
       });
     });
   }
@@ -544,6 +553,15 @@ export class DiagramCanvas {
 
   getLogHighlights(): Map<string, LogHighlightStyle> {
     return new Map(this.logHighlights);
+  }
+
+  // Log Annotation Methods
+  clearLogAnnotations(): void {
+    this.logAnnotations.clear();
+  }
+
+  getLogAnnotations(): Map<string, string> {
+    return new Map(this.logAnnotations);
   }
 
   private processLogAction(action: LogAction): ProcessedLogAction {
